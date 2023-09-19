@@ -1,4 +1,6 @@
 #include "main.h"
+#include "okapi/api.hpp"
+using namespace okapi;
 
 /**
  * A callback function for LLEMU's center button.
@@ -71,23 +73,61 @@ void autonomous() {}
  *
  * If the robot is disabled or communications is lost, the
  * operator control task will be stopped. Re-enabling the robot will restart the
- * task, not resume it from where it left off.
+ * task, not resume it from where it left off
  */
+std::shared_ptr<ChassisController> myChassis =
+  ChassisControllerBuilder()
+    .withMotors({-15, 13, 20}, {16, -8, -14})
+    // Green gearset, 4 in wheel diam, 11.5 in wheel track
+    .withDimensions(AbstractMotor::gearset::green, {{3.250_in, 3.250_in}, imev5GreenTPR})
+    .build();
+
+std::shared_ptr<AsyncMotionProfileController> profileController = 
+  AsyncMotionProfileControllerBuilder()
+    .withLimits({
+      10.0, // Maximum linear velocity of the Chassis in m/s
+      3.0, // Maximum linear acceleration of the Chassis in m/s/s
+      10.0 // Maximum linear jerk of the Chassis in m/s/s/s
+    })
+    .withOutput(myChassis)
+    .buildMotionProfileController();
+
+
 void opcontrol() {
-	pros::Controller master(pros::E_CONTROLLER_MASTER);
-	pros::Motor left_mtr(1);
-	pros::Motor right_mtr(2);
+	// std::shared_ptr<ChassisController> drive = 
+	// ChassisControllerBuilder()
+	// .withMotors({-15, 13, 20} , {16, -8, -14})
+	// .withDimensions(AbstractMotor::gearset::blue, {{3.250_in, 3.250_in}, imev5GreenTPR})
+	// .build();
 
-	while (true) {
-		pros::lcd::print(0, "%d %d %d", (pros::lcd::read_buttons() & LCD_BTN_LEFT) >> 2,
-		                 (pros::lcd::read_buttons() & LCD_BTN_CENTER) >> 1,
-		                 (pros::lcd::read_buttons() & LCD_BTN_RIGHT) >> 0);
-		int left = master.get_analog(ANALOG_LEFT_Y);
-		int right = master.get_analog(ANALOG_RIGHT_Y);
+	// Controller controller;
 
-		left_mtr = left;
-		right_mtr = right;
+	// ControllerButton runAutoButton(ControllerDigital::X);
 
-		pros::delay(20);
-	}
+
+	// while(true){
+	// 	drive->getModel()->arcade(controller.getAnalog(ControllerAnalog::leftY),
+    //                               controller.getAnalog(ControllerAnalog::leftX));
+
+	// 	if (runAutoButton.changedToPressed()) {
+    //         // Drive the robot in a square pattern using closed-loop control
+    //         for (int i = 0; i < 4; i++) {
+    //             drive->moveDistance(12_in); // Drive forward 12 inches
+    //             drive->turnAngle(90_deg);   // Turn in place 90 degrees
+    //         }
+    //     }
+
+    //     // Wait and give up the time we don't need to other tasks.
+    //     // Additionally, joystick values, motor telemetry, etc. all updates every 10 ms.
+    //     pros::delay(10);						  
+	// }
+
+	profileController->generatePath(
+    {{0_ft, 0_ft, 0_deg},    // Waypoint A: At (0 feet, 0 feet) with 0 degrees orientation
+    {3_ft, 0_ft, 45_deg},   // Waypoint B: At (3 feet, 0 feet) with 45 degrees orientation
+    {5_ft, 2_ft, 90_deg},   // Waypoint C: At (5 feet, 2 feet) with 90 degrees orientation
+    {2_ft, 4_ft, -30_deg}},
+	"A");
+  	profileController->setTarget("A");
+  	profileController->waitUntilSettled();
 }
